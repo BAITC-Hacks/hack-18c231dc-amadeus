@@ -36,6 +36,16 @@ SELECT COUNT(*) FROM incompatibilities;
 - `synergies`: 3
 - `incompatibilities`: 3
 
+## Быстрый просмотр мер
+
+```sql
+SET search_path TO city_simulator;
+
+SELECT id, direction, name, type, cost, lag
+FROM measures
+ORDER BY order_index;
+```
+
 ## Пересоздание SQL из JSON
 
 Если `data/city.json` изменится, пересоздайте PostgreSQL-скрипт:
