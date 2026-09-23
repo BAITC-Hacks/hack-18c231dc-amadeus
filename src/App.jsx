@@ -1,12 +1,10 @@
 import {
-  AlertCircle,
-  BarChart3,
+  Bot,
   CheckCircle2,
   Database,
-  MapPinned,
-  Play,
   Plus,
   RotateCcw,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -198,6 +196,11 @@ function formatNumber(value, digits = 1) {
 }
 
 
+function indicatorTitle(code) {
+  return city.indicators[code]?.name ?? code;
+}
+
+
 function App() {
   const [decisions, setDecisions] = useState(makeInitialDecisions);
   const [activeDirection, setActiveDirection] = useState("Все");
@@ -209,6 +212,7 @@ function App() {
   const filteredMeasures = city.measures.filter(
     (measure) => activeDirection === "Все" || measure.direction === activeDirection,
   );
+  const analysis = useMemo(() => buildLocalAnalysis(decisions, result), [decisions, result]);
 
   function updateDecision(index, patch) {
     setDecisions((current) => current.map((decision, itemIndex) => {
@@ -239,17 +243,17 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">Astana Quality of Life Score</p>
-          <h1>Аким на 5 часов</h1>
+        <div className="brand">
+          <strong>Аким на 5 часов</strong>
+          <span>AI-симулятор управления городом</span>
         </div>
         <div className="topbar-actions">
-          <button className="ghost-button" type="button" onClick={() => setDecisions(makeInitialDecisions())}>
-            <Sparkles size={18} />
+          <button className="dark-button" type="button" onClick={() => setDecisions(makeInitialDecisions())}>
+            <Sparkles size={14} />
             Пример
           </button>
-          <button className="ghost-button" type="button" onClick={() => setDecisions(Array.from({ length: city.rules.decision_count }, emptyDecision))}>
-            <RotateCcw size={18} />
+          <button className="dark-button" type="button" onClick={() => setDecisions(Array.from({ length: city.rules.decision_count }, emptyDecision))}>
+            <RotateCcw size={14} />
             Сброс
           </button>
         </div>
@@ -257,19 +261,16 @@ function App() {
 
       <section className="kpi-grid" aria-label="Итоги сценария">
         <MetricCard label="Score" value={formatNumber(result.Score, 2)} accent="strong" />
-        <MetricCard label="Бюджет" value={`${result.cost}/${city.budget}`} accent={result.cost > city.budget ? "bad" : "ok"} />
+        <MetricCard label="Бюджет" value={`${result.cost} / ${city.budget}`} />
         <MetricCard label="Средний D" value={formatNumber(result.D_avg, 2)} />
         <MetricCard label="Мин. район" value={formatNumber(result.D_min, 2)} />
-        <MetricCard label="Критичные" value={result.N_crit} accent={result.N_crit ? "bad" : "ok"} />
+        <MetricCard label="Критичные" value={result.N_crit} />
       </section>
 
       <section className="workspace-grid">
         <section className="panel decision-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Сценарий</p>
-              <h2>5 решений</h2>
-            </div>
+          <div className="panel-heading compact">
+            <h2>Сценарий · 5 решений</h2>
             <StatusPill errors={errors} />
           </div>
 
@@ -310,57 +311,49 @@ function App() {
                       </select>
                     </label>
                   </div>
-                  <div className="decision-meta">
-                    <span>{measure ? `${measure.cost} ед.` : "0 ед."}</span>
-                    <button className="icon-button" type="button" onClick={() => updateDecision(index, emptyDecision())} aria-label="Очистить">
-                      <X size={17} />
-                    </button>
-                  </div>
+                  <span className="cost-chip">{measure ? `${measure.cost} ед.` : "0 ед."}</span>
+                  <button className="icon-button" type="button" onClick={() => updateDecision(index, emptyDecision())} aria-label="Очистить">
+                    <X size={15} />
+                  </button>
                 </article>
               );
             })}
           </div>
 
-          <div className="error-box" data-empty={!errors.length}>
+          <div className="validation-box" data-empty={!errors.length}>
             {errors.length ? (
               errors.map((error) => (
-                <div className="error-line" key={error}>
-                  <AlertCircle size={16} />
+                <div className="validation-line" key={error}>
+                  <ShieldCheck size={15} />
                   {error}
                 </div>
               ))
             ) : (
-              <div className="error-line ok">
-                <CheckCircle2 size={16} />
-                Сценарий валиден
+              <div className="validation-line ok">
+                <ShieldCheck size={15} />
+                Сценарий валиден. Все 5 решений распределены корректно в рамках лимитов бюджета.
               </div>
             )}
           </div>
         </section>
 
-        <section className="panel map-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Районы</p>
-              <h2>Баланс качества</h2>
-            </div>
-            <MapPinned size={22} />
+        <section className="panel district-panel">
+          <div className="panel-heading compact">
+            <h2>Районы · баланс качества</h2>
           </div>
-          <CityMap scores={result.D} activeDistrict={activeDistrict} setActiveDistrict={setActiveDistrict} />
-          <DistrictDetails
-            district={activeDistrict}
-            result={result}
+          <DistrictGrid
+            scores={result.D}
+            activeDistrict={activeDistrict}
+            setActiveDistrict={setActiveDistrict}
           />
+          <DistrictDetails district={activeDistrict} result={result} />
         </section>
       </section>
 
       <section className="panel catalog-panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Каталог</p>
-            <h2>Меры развития</h2>
-          </div>
-          <Database size={22} />
+        <div className="panel-heading compact">
+          <h2>Каталог · меры развития</h2>
+          <Database size={19} />
         </div>
 
         <div className="segmented-control" aria-label="Фильтр направления">
@@ -382,10 +375,7 @@ function App() {
             return (
               <article className="measure-card" key={measure.id}>
                 <div className="measure-card-top">
-                  <div>
-                    <span className="measure-id">{measure.id}</span>
-                    <h3>{measure.name}</h3>
-                  </div>
+                  <span className="measure-id">{measure.id}</span>
                   <button
                     className="icon-button add-button"
                     type="button"
@@ -393,9 +383,10 @@ function App() {
                     disabled={selected}
                     aria-label="Добавить меру"
                   >
-                    <Plus size={18} />
+                    <Plus size={17} />
                   </button>
                 </div>
+                <h3>{measure.name}</h3>
                 <div className="measure-facts">
                   <span>{measure.direction}</span>
                   <span>{measure.type === "city" ? "Город" : "Район"}</span>
@@ -414,6 +405,8 @@ function App() {
           })}
         </div>
       </section>
+
+      <AnalysisPanel analysis={analysis} />
     </main>
   );
 }
@@ -433,58 +426,35 @@ function StatusPill({ errors }) {
   if (errors.length) {
     return (
       <span className="status-pill bad">
-        <AlertCircle size={16} />
+        <X size={13} />
         {errors.length}
       </span>
     );
   }
   return (
     <span className="status-pill ok">
-      <CheckCircle2 size={16} />
+      <CheckCircle2 size={13} />
       OK
     </span>
   );
 }
 
 
-function CityMap({ scores, activeDistrict, setActiveDistrict }) {
-  const shapes = [
-    { district: districtNames[0], x: 14, y: 16, width: 32, height: 28 },
-    { district: districtNames[1], x: 47, y: 18, width: 38, height: 27 },
-    { district: districtNames[2], x: 19, y: 48, width: 33, height: 31 },
-    { district: districtNames[3], x: 55, y: 51, width: 31, height: 28 },
-    { district: districtNames[4], x: 36, y: 32, width: 31, height: 31 },
-  ];
-
+function DistrictGrid({ scores, activeDistrict, setActiveDistrict }) {
   return (
-    <svg className="city-map" viewBox="0 0 100 92" role="img" aria-label="Схема районов">
-      <rect className="map-background" x="4" y="4" width="92" height="84" rx="8" />
-      {shapes.map((shape) => {
-        const active = shape.district === activeDistrict;
-        const score = scores[shape.district];
-        return (
-          <g
-            className={`district-shape ${active ? "active" : ""}`}
-            key={shape.district}
-            onClick={() => setActiveDistrict(shape.district)}
-            tabIndex="0"
-            role="button"
-          >
-            <rect
-              x={shape.x}
-              y={shape.y}
-              width={shape.width}
-              height={shape.height}
-              rx="5"
-            />
-            <text x={shape.x + 5} y={shape.y + 13}>{shape.district}</text>
-            <text className="score-label" x={shape.x + 5} y={shape.y + 24}>
-              {formatNumber(score, 1)}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <div className="district-grid">
+      {districtNames.map((district) => (
+        <button
+          className={`district-card ${district === activeDistrict ? "active" : ""}`}
+          key={district}
+          type="button"
+          onClick={() => setActiveDistrict(district)}
+        >
+          <span>{district}</span>
+          <strong>{formatNumber(scores[district], 1)}</strong>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -498,23 +468,97 @@ function DistrictDetails({ district, result }) {
   return (
     <div className="district-details">
       <div className="district-score">
-        <span>{district}</span>
+        <h3>Детали района: {district}</h3>
         <strong>{formatNumber(result.D[district], 2)}</strong>
       </div>
       <div className="indicator-bars">
-        {lowest.map(([indicator, value]) => (
+        {lowest.map(([indicator, value], index) => (
           <div className="indicator-bar" key={indicator}>
             <div className="bar-label">
-              <span>{indicator}</span>
+              <span>{indicator} · {indicatorTitle(indicator)}</span>
               <span>{formatNumber(value, 1)}</span>
             </div>
             <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${value}%` }} />
+              <div className={`bar-fill tone-${index}`} style={{ width: `${value}%` }} />
             </div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+
+function buildLocalAnalysis(decisions, result) {
+  const selectedMeasures = decisions
+    .filter((decision) => measureById[decision.measure_id])
+    .map((decision) => ({ ...measureById[decision.measure_id], district: decision.district }));
+  const weakestDistrict = Object.entries(result.D)
+    .sort((first, second) => first[1] - second[1])[0]?.[0];
+  const strongestDirection = selectedMeasures.reduce((counts, measure) => {
+    counts[measure.direction] = (counts[measure.direction] ?? 0) + 1;
+    return counts;
+  }, {});
+  const dominantDirection = Object.entries(strongestDirection)
+    .sort((first, second) => second[1] - first[1])[0]?.[0];
+  const slowMeasures = selectedMeasures
+    .filter((measure) => measure.lag >= 3)
+    .map((measure) => measure.id);
+
+  return {
+    source: "Local Analysis",
+    strengths: [
+      `Score сценария: ${formatNumber(result.Score, 2)} при бюджете ${result.cost}/${city.budget}.`,
+      dominantDirection
+        ? `Основной фокус набора: ${dominantDirection}; лимит по направлениям контролируется валидатором.`
+        : "Каталог мер готов для выбора управленческого набора.",
+    ],
+    risks: [
+      `Самый слабый район сейчас: ${weakestDistrict}; D = ${formatNumber(result.D[weakestDistrict], 2)}.`,
+      slowMeasures.length
+        ? `Меры ${slowMeasures.join(", ")} имеют лаг 3+ квартала, поэтому первый эффект будет не мгновенным.`
+        : "В наборе нет мер с высоким лагом реализации.",
+    ],
+    recommendations: [
+      "Сравнить набор с альтернативами по слабому району и критичным показателям.",
+      result.N_crit
+        ? "Сначала закрыть показатели ниже критического порога 40."
+        : "Сохранить баланс: критичных показателей после выбранных мер нет.",
+    ],
+  };
+}
+
+
+function AnalysisPanel({ analysis }) {
+  return (
+    <section className="panel analysis-panel">
+      <div className="panel-heading compact">
+        <h2>AI-анализ сценария</h2>
+        <span className="source-badge">
+          <Bot size={14} />
+          {analysis.source}
+        </span>
+      </div>
+      <div className="analysis-grid">
+        <AnalysisColumn title="Сильные стороны" tone="green" items={analysis.strengths} />
+        <AnalysisColumn title="Риски" tone="amber" items={analysis.risks} />
+        <AnalysisColumn title="Рекомендации" tone="blue" items={analysis.recommendations} />
+      </div>
+    </section>
+  );
+}
+
+
+function AnalysisColumn({ title, tone, items }) {
+  return (
+    <article className="analysis-column">
+      <h3 className={tone}>{title}</h3>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </article>
   );
 }
 
