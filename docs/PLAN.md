@@ -1,10 +1,10 @@
 # План: «Аким на 5 часов»
 
-Составлен 23.09.2026 в 13:50, обновлён в 15:50 по фактическому коду в `main`. Заморозка фич — 16:45, финальный push — 17:45, сдача — 18:00.
+Составлен 23.09.2026 в 13:50, обновлён в 16:20 по фактическому коду в `main` (после коммита `cf8f4ee`). Заморозка фич — 16:45, финальный push — 17:45, сдача — 18:00.
 
 ## 1. Требования из ТЗ и статус
 
-| Требование | Тип | Как проверяется | Статус на 15:50 |
+| Требование | Тип | Как проверяется | Статус на 16:20 (`main`) |
 |---|---|---|---|
 | Единый виртуальный бюджет для всех | must have | `budget` в `data/city.json`, отдаётся в `GET /api/config` | готово |
 | Решения по 5 направлениям | must have | `engine/validator.py`: ровно 5 мер, не больше 2 на направление (правила датасета) | готово |
@@ -24,7 +24,7 @@
 
 ## 3. Архитектура и стек
 
-Стек: Python 3.10+, FastAPI, uvicorn, официальный `openai` SDK (Responses API, Structured Outputs), python-dotenv, pytest + httpx. UI: React 19 + Vite 6 + lucide-react.
+Стек: Python 3.10+, FastAPI, uvicorn, официальный `openai` SDK (Responses API, Structured Outputs), python-dotenv, numpy, pytest + httpx. UI: React 19 + Vite 6 + lucide-react.
 
 ```
 engine/
@@ -33,14 +33,18 @@ engine/
   simulator.py      детерминированный расчёт Score
   database.py       SQLite-копия датасета
   postgres_dump.py  выгрузка датасета в SQL для Postgres
+  optimizer.py      оптимум полным перебором (numpy), одиночные замены
 api/
   main.py           FastAPI: /api/config, /api/simulate, /api/explain
   explanation.py    AI-объяснение и резервный шаблон без ключа
+  agent.py          агент с tool calling (пока не подключён к /api/explain)
 data/
   city.json         районы, показатели, веса, 14 мер, синергии, несовместимости
   city.sqlite, city_postgres.sql
 src/                React UI (App.jsx, main.jsx, styles.css), index.html, vite.config.js
-tests/              test_engine, test_api, test_explain, test_database (77 тестов)
+tests/              102 теста в main на 16:20 (pytest --collect-only):
+                    test_engine 36, test_api 20, test_explain 19, test_database 2,
+                    test_optimizer 10, test_agent 15
 ```
 
 **Разделение ответственности.** Score считает только движок `engine/`. Модель объясняет готовые числа и ничего не пересчитывает.
