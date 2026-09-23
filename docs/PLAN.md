@@ -4,17 +4,17 @@
 
 ## 1. Требования из ТЗ и статус
 
-| Требование | Тип | Как проверяется | Статус на 16:20 (`main`) |
+| Требование | Тип | Как проверяется | Статус на 17:20 (`main`) |
 |---|---|---|---|
 | Единый виртуальный бюджет для всех | must have | `budget` в `data/city.json`, отдаётся в `GET /api/config` | готово |
 | Решения по 5 направлениям | must have | `engine/validator.py`: ровно 5 мер, не больше 2 на направление (правила датасета) | готово |
 | Автоматический контроль превышения бюджета | must have | `POST /api/simulate` → HTTP 200 `{"valid": false, "errors": [...]}`; автотесты | готово |
-| AI-анализ принятых решений | must have | `POST /api/explain`; без ключа — шаблон с `ai_generated: false` | API готов, **в UI нет** |
+| AI-анализ принятых решений | must have | `POST /api/explain`; без ключа — шаблон с `ai_generated: false` | Готово: агент в `/api/explain`, в UI — кнопка «Объяснить результат» с подписью источника |
 | Расчёт Astana Quality of Life Score | must have | `engine/simulator.py`, автотесты с эталонами датасета | готово |
-| Объяснение сильных сторон, рисков, последствий | must have | поля `strengths`, `risks`, `consequences`, `recommendations` в `/api/explain` | API готов, **в UI нет** |
+| Объяснение сильных сторон, рисков, последствий | must have | поля `strengths`, `risks`, `consequences`, `recommendations` в `/api/explain` | Готово: API и UI |
 | Изменение решений меняет Score | критерий проверки | автотесты движка | готово |
-| README и воспроизводимость | 25 баллов | проход по README из чистого клона | **README не описывает запуск UI** |
-| Использование AI/agentic AI | 25 баллов | агент с tool calling сам вызывает движок для проверки альтернатив | `api/agent.py` и `engine/optimizer.py` готовы, тесты на подменённом клиенте; **к `/api/explain` подключает xehrf** |
+| README и воспроизводимость | 25 баллов | проход по README из чистого клона | Готово 17:16: README по Промт 5, все команды пройдены из чистого клона |
+| Использование AI/agentic AI | 25 баллов | агент с tool calling сам вызывает движок для проверки альтернатив | `api/agent.py` и `engine/optimizer.py` готовы, тесты на подменённом клиенте; подключено к `/api/explain` в 17:11, живой прогон — `ai_generated: true` за 31 с, 3 инструмента |
 
 ## 2. MVP
 
@@ -37,14 +37,15 @@ engine/
 api/
   main.py           FastAPI: /api/config, /api/simulate, /api/explain
   explanation.py    AI-объяснение и резервный шаблон без ключа
-  agent.py          агент с tool calling (пока не подключён к /api/explain)
+  agent.py          агент с tool calling, используется в /api/explain
 data/
   city.json         районы, показатели, веса, 14 мер, синергии, несовместимости
   city.sqlite, city_postgres.sql
 src/                React UI (App.jsx, main.jsx, styles.css), index.html, vite.config.js
-tests/              102 теста в main на 16:20 (pytest --collect-only):
-                    test_engine 36, test_api 20, test_explain 19, test_database 2,
-                    test_optimizer 10, test_agent 15
+tests/              125 тестов в main на 17:20 (pytest --collect-only):
+                    test_engine 36, test_api 20, test_explain 21, test_database 2,
+                    test_optimizer 10, test_agent 16, test_scenario_api 7,
+                    test_scenario_stats 13; плюс npm test — 8
 ```
 
 **Разделение ответственности.** Score считает только движок `engine/`. Модель объясняет готовые числа и ничего не пересчитывает.
@@ -76,6 +77,8 @@ tests/              102 теста в main на 16:20 (pytest --collect-only):
 Чужой файл правит только его владелец. Подключение агента в `api/main.py` / `api/explanation.py` делает xehrf по договорённости с Маликой.
 
 ### Задачи до 16:45, по приоритету
+
+Итог на 17:20: пункты 1–4 закрыты. UI на API — xehrf (17:00). Подключение агента, README и подпись источника в UI (`tools_called`) — Малика по согласованию («беру»), коммиты 17:11, 17:16, 17:19.
 
 1. **xehrf:** UI вызывает `/api/simulate` и `/api/explain`, показывает AI-разбор с подписью источника («AI-анализ: <модель>» или «Резервный режим: объяснение по шаблону, без LLM»). Расчёт Score и бюджета в `App.jsx` заменяется ответом API.
 2. **secorluve:** README — запуск API и UI (`npm install`, `npm run dev`), режим без ключа, раздел «Сторонние компоненты» (FastAPI, uvicorn, openai, python-dotenv, pytest, httpx, React, Vite, lucide-react, датасет организаторов). Убрать фразу «интерфейс пока не реализован».
