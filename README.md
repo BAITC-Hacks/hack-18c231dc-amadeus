@@ -34,7 +34,7 @@ curl -X POST http://127.0.0.1:8000/api/simulate -H "Content-Type: application/js
 | 4. Контроль бюджета | `POST /api/simulate`, `examples/over_budget.json` | `valid: false`, `errors: ["Стоимость 121 превышает бюджет 100."]`, Score не считается |
 | 5. Объяснение без ключа | `POST /api/explain`, `examples/example.json` | `ai_generated: false`, `tools_called: []`, заполнены `summary`, `strengths`, `risks`, `consequences`, `recommendations`, `contributions` |
 | 6. Доказуемый оптимум | `python -c "from engine.optimizer import optimize; r = optimize(1); print(r['n_valid'], r['top'][0]['Score'], r['top'][0]['cost'])"` | `694395 57.236734999999996 98` (M2, M3 в Нуре, M8 в Нуре, M9 в Нуре, M14), около 1 с |
-| 7. Интерфейс | `npm run dev`, http://localhost:5173/ → «Пример» → «Рассчитать» → «Объяснить результат» | Те же Score и причины ошибок, что в шагах 2–5; без ключа отметка «Шаблонное объяснение — AI недоступен» |
+| 7. Интерфейс | `npm run dev`, http://localhost:5173/ → «Пример» → «Рассчитать» → «Объяснить результат» | Те же Score и причины ошибок, что в шагах 2–5; без ключа отметка «Резервный режим: объяснение по шаблону, без LLM», с ключом — «AI-агент, инструменты движка: …» |
 
 Автотесты: `python -m pytest -q` (125 тестов) и `npm test` (8 тестов). В тестах
 клиент OpenAI подменён, в сеть они не ходят даже при заполненном `.env`.

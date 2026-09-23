@@ -227,14 +227,14 @@ function Simulator({ city }) {
 
       <section className="panel analysis-panel explanation-panel" aria-busy={explanationStatus === "loading"}>
         <div className="panel-heading compact"><h2>Объяснение результата</h2>
-          <button className="dark-button" type="button" disabled={!result || busy} onClick={requestExplanation}><Sparkles size={18} />{explanationStatus === "loading" ? "Готовим объяснение…" : "Объяснить результат"}</button>
+          <button className="dark-button" type="button" disabled={!result || busy} onClick={requestExplanation}><Sparkles size={18} />{explanationStatus === "loading" ? "AI-агент анализирует… (~30 с)" : "Объяснить результат"}</button>
         </div>
         {!result && <p>Сначала рассчитайте валидный набор решений.</p>}
         {result && !explanation && explanationStatus === "idle" && <p>Получите разбор сильных сторон, рисков и возможных последствий.</p>}
         {explanationError && <p className="validation-line" role="alert">{explanationError}</p>}
         <div aria-live="polite">
           {explanation && <>
-            <span className={`source-badge explanation-badge ${explanation.ai_generated ? "" : "template"}`}><Bot size={15} />{explanation.ai_generated ? "AI-объяснение" : "Шаблонное объяснение — AI недоступен"}</span>
+            <span className={`source-badge explanation-badge ${explanation.ai_generated ? "" : "template"}`}><Bot size={15} />{explanation.ai_generated ? `AI-агент, инструменты движка: ${explanation.tools_called?.join(", ") || "—"}` : "Резервный режим: объяснение по шаблону, без LLM"}</span>
             <p>{explanation.summary}</p>
             <div className="analysis-grid explanation-grid">{explanationSections.map(([key, title]) => <section className="analysis-column" key={key}><h3 className={key === "risks" ? "amber" : key === "strengths" ? "green" : "blue"}>{title}</h3>{explanation[key].length ? <ul>{explanation[key].map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Нет дополнительных замечаний.</p>}</section>)}</div>
           </>}
