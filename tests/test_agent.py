@@ -127,6 +127,8 @@ def test_agent_calls_engine_tools_and_answer_is_grounded(data, scripted):
     assert first["model"] == "test-model"
     assert {tool["name"] for tool in first["tools"]} == {"score_scenario", "suggest_swaps", "get_optimum"}
     assert first["parallel_tool_calls"] is False
+    assert first["tool_choice"] == {"type": "function", "name": "score_scenario"}
+    assert "max_output_tokens" not in first
     assert json.loads(first["input"][1]["content"]) == {"decisions": AS_MODEL}
 
     second = create.call_args_list[1].kwargs
@@ -181,7 +183,7 @@ def test_tool_call_limit(data, scripted):
     explanation, ai_generated = agent.explain_with_agent(data)
     assert ai_generated is True
     assert explanation.tools_called == ["score_scenario"] + ["get_optimum"] * 3
-    assert [item.kwargs["tool_choice"] for item in create.call_args_list] == ["auto"] * 4 + ["none"]
+    assert [item.kwargs["tool_choice"] for item in create.call_args_list] == [agent.FIRST_TOOL] + ["auto"] * 3 + ["none"]
 
 
 def test_model_ignoring_limit_gets_template(data, scripted):
@@ -199,11 +201,14 @@ def test_model_ignoring_limit_gets_template(data, scripted):
     APITimeoutError(request=httpx.Request("POST", "https://api.openai.com/v1/responses")),
     RuntimeError("неожиданная ошибка"),
 ])
-def test_errors_and_timeouts_fall_back_without_raising(data, scripted, failure):
+def test_errors_and_timeouts_fall_back_without_raising(data, scripted, failure, caplog):
     scripted(failure)
     explanation, ai_generated = agent.explain_with_agent(data)
     assert ai_generated is False
     assert explanation.summary == template_explanation(data).summary
+    # В журнале тип ошибки для диагностики живого прогона, но не текст исключения.
+    assert type(failure).__name__ in caplog.text
+    assert "неожиданная ошибка" not in caplog.text
 
 
 @pytest.mark.parametrize("final", [
@@ -214,6 +219,14 @@ def test_errors_and_timeouts_fall_back_without_raising(data, scripted, failure):
 def test_bad_final_answer_falls_back(data, scripted, final):
     scripted(tool_turn("resp_1", call("score_scenario", {}, "call_1")), final)
     assert agent.explain_with_agent(data)[1] is False
+
+
+def test_incomplete_reason_is_logged(data, scripted, caplog):
+    final = final_turn(scenario_answer(), status="incomplete")
+    final.incomplete_details = SimpleNamespace(reason="max_output_tokens")
+    scripted(tool_turn("resp_1", call("score_scenario", {}, "call_1")), final)
+    assert agent.explain_with_agent(data)[1] is False
+    assert "incomplete" in caplog.text and "max_output_tokens" in caplog.text
 
 
 def test_bad_tool_arguments_are_returned_to_model(data, scripted):

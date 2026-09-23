@@ -7,6 +7,7 @@
 """
 
 import json
+import logging
 import os
 import re
 import time
@@ -25,10 +26,15 @@ from engine.validator import validate
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
+logger = logging.getLogger(__name__)
+
 MAX_TOOL_CALLS = 4
 MAX_TOP_K = 3
-REQUEST_TIMEOUT = 20.0
-TOTAL_TIMEOUT = 45.0
+# Reasoning-модели думают дольше; лимит токенов не задаём, чтобы ответ не обрывался со статусом incomplete.
+REQUEST_TIMEOUT = 60.0
+TOTAL_TIMEOUT = 90.0
+# Первый ход всегда считает сценарий пользователя: без этого объяснять нечего.
+FIRST_TOOL = {"type": "function", "name": "score_scenario"}
 # Числа, не приклеенные к буквам: коды M14, T1 не считаются числами.
 # 1_000 и 1e6 разбираются целиком, чтобы не пройти проверку по первой цифре.
 NUMBER_RE = re.compile(r"(?<![\w.,])[+\-−]?\d[\d_]*(?:[.,]\d+)?(?:[eE][+\-]?\d+)?")
@@ -239,6 +245,18 @@ def _scenario(data: dict) -> list[dict]:
     ]
 
 
+def _reject(reason: str, *args) -> None:
+    """Причина отказа в журнал сервера: только тип и статус, без текста запросов и ключей."""
+    logger.warning("Агент вернул шаблон: " + reason, *args)
+    return None
+
+
+def _tool_choice(called: list[str]):
+    if not called:
+        return FIRST_TOOL
+    return "auto" if len(called) < MAX_TOOL_CALLS else "none"
+
+
 def run_agent(client, model: str, data: dict) -> AgentExplanation | None:
     """Цикл tool calling; None означает, что ответ модели не принят."""
     deadline = time.monotonic() + TOTAL_TIMEOUT
@@ -255,30 +273,31 @@ def run_agent(client, model: str, data: dict) -> AgentExplanation | None:
     for _ in range(MAX_TOOL_CALLS + 1):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            return None
+            return _reject("истекло общее время %s с", TOTAL_TIMEOUT)
         response = client.responses.create(
             model=model,
             tools=TOOLS,
-            tool_choice="auto" if len(called) < MAX_TOOL_CALLS else "none",
+            tool_choice=_tool_choice(called),
             parallel_tool_calls=False,
             text={"format": {
                 "type": "json_schema", "name": "city_explanation", "strict": True,
                 "schema": Explanation.model_json_schema(),
             }},
-            max_output_tokens=2048,
             timeout=min(REQUEST_TIMEOUT, remaining),
             **request,
         )
         if response.status != "completed":
-            return None
+            details = getattr(response, "incomplete_details", None)
+            return _reject("статус %s, причина %s", response.status, getattr(details, "reason", None))
         calls = [item for item in response.output if item.type == "function_call"]
         if not calls:
             # Без расчёта сценария пользователя объяснять нечего.
             if not scenario_scored:
-                return None
+                return _reject("сценарий пользователя не рассчитан")
             explanation = Explanation.model_validate_json(response.output_text)
-            if unverified_numbers(explanation, results):
-                return None
+            bad = unverified_numbers(explanation, results)
+            if bad:
+                return _reject("чисел не из инструментов: %s", len(bad))
             return AgentExplanation(**explanation.model_dump(), tools_called=called)
         outputs = []
         for call in calls:
@@ -297,7 +316,7 @@ def run_agent(client, model: str, data: dict) -> AgentExplanation | None:
             })
         # Состояние диалога, включая reasoning, хранится на стороне Responses API.
         request = {"previous_response_id": response.id, "input": outputs}
-    return None
+    return _reject("модель не закончила за %s вызовов", MAX_TOOL_CALLS)
 
 
 def fallback(data: dict) -> AgentExplanation:
@@ -313,9 +332,9 @@ def explain_with_agent(data: dict) -> tuple[Explanation, bool]:
     try:
         with OpenAI(api_key=api_key, timeout=REQUEST_TIMEOUT, max_retries=0) as client:
             answer = run_agent(client, model, data)
-    except Exception:
-        # Наружу ничего не выпускаем и текст исключения не возвращаем: в нём могут быть служебные данные.
-        answer = None
+    except Exception as error:
+        # Наружу ничего не выпускаем и текст исключения не пишем: в нём могут быть служебные данные.
+        answer = _reject("ошибка %s", type(error).__name__)
     if answer is None:
         return fallback(data), False
     return answer, True
