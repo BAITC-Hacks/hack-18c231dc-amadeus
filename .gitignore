@@ -1,0 +1,30 @@
+# Окружения
+.venv/
+venv/
+env/
+node_modules/
+
+# Кэши
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv/
+
+# Секреты
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*id_rsa*
+
+# Сборка и IDE
+dist/
+build/
+*.egg-info/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
