@@ -244,13 +244,31 @@ def test_openai_error_returns_template(client, example, model_client, error_kind
     ("completed", '{"summary":"Нет остальных полей"}'),
 ])
 def test_unusable_model_response_returns_template(client, example, model_client, status, output):
+    # Первый ответ запускает расчёт; второй проверяет именно обработку
+    # непригодного финального ответа, а не откат до вызова инструмента.
     model_client.responses.create.side_effect = [
-        tool_turn("resp_1", call("score_scenario", {}, "call_1")),
-        final_turn(output, status=status),
+        SimpleNamespace(
+            id="resp_1", status="completed", output_text="",
+            output=[SimpleNamespace(
+                type="function_call", name="score_scenario",
+                arguments="{}", call_id="call_1",
+            )],
+        ),
+        SimpleNamespace(
+            id="resp_final", status=status, output_text=output,
+            output=[SimpleNamespace(type="message")],
+        ),
     ]
     response = client.post("/api/explain", json={"decisions": example})
     assert response.status_code == 200
     assert response.json()["ai_generated"] is False
+    assert model_client.responses.create.call_count == 2
+    second_request = model_client.responses.create.call_args.kwargs
+    assert second_request["previous_response_id"] == "resp_1"
+    [tool_result] = second_request["input"]
+    assert tool_result["type"] == "function_call_output"
+    assert tool_result["call_id"] == "call_1"
+    assert json.loads(tool_result["output"])["valid"] is True
 
 
 def test_client_cannot_supply_score(client, example, isolated_openai):
