@@ -6,14 +6,15 @@
   line-height: 1.45;
   font-weight: 400;
   color: #1f2329;
-  background: #050505;
+  background: #eef3f6;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --page: #050505;
+  --page: #eef3f6;
   --surface: #ffffff;
   --surface-soft: #f3f3f2;
   --surface-muted: #efefee;
+  --surface-band: #f7fafb;
   --ink: #1f2329;
   --muted: #67717a;
   --line: #d9dee2;
@@ -38,7 +39,12 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--page);
+  background:
+    linear-gradient(180deg, #f8fbfc 0, #eef3f6 220px, #e8eef2 100%);
+}
+
+#root {
+  min-height: 100vh;
 }
 
 button,
@@ -56,9 +62,9 @@ button:disabled {
 }
 
 .app-shell {
-  width: min(1392px, calc(100% - 64px));
+  width: min(1480px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 24px 0 44px;
+  padding: 18px 0 44px;
 }
 
 .topbar {
@@ -69,8 +75,11 @@ button:disabled {
   gap: 18px;
   margin-bottom: 18px;
   padding: 0 18px;
-  border: 2px solid #0284c7;
-  background: #0d1117;
+  border: 1px solid #cbd8e0;
+  border-left: 4px solid var(--blue);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .brand {
@@ -81,7 +90,7 @@ button:disabled {
 }
 
 .brand strong {
-  color: #ffffff;
+  color: #142029;
   font-size: 15px;
   font-weight: 900;
   letter-spacing: 0;
@@ -89,7 +98,7 @@ button:disabled {
 }
 
 .brand span {
-  color: #8dbbd1;
+  color: var(--blue);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -114,18 +123,18 @@ button:disabled {
 .dark-button {
   min-height: 30px;
   gap: 6px;
-  border: 1px solid #2d3742;
+  border: 1px solid #cfd8de;
   border-radius: 4px;
   padding: 0 10px;
-  background: #151b23;
-  color: #f4f7f9;
+  background: var(--surface-band);
+  color: #25313b;
   font-size: 12px;
   font-weight: 800;
 }
 
 .dark-button:hover {
-  border-color: #5f7384;
-  background: #1e2731;
+  border-color: #93adbb;
+  background: #edf6fa;
 }
 
 .kpi-grid {
