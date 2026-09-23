@@ -139,8 +139,16 @@ def optimize(top_k: int = 10) -> dict:
                 "cost": cost,
             })
 
-    candidates.sort(key=lambda item: (-item["Score"], item["cost"], repr(item["decisions"])))
-    return {"n_valid": n_valid, "top": candidates[:top_k]}
+    def order(item):
+        return -item["Score"], item["cost"], repr(item["decisions"])
+
+    candidates.sort(key=order)
+    top = candidates[:top_k]
+    # numpy суммирует в другом порядке, чем fsum в simulate(): итоговый Score берём из simulate().
+    for item in top:
+        item["Score"] = simulate(item["decisions"])["Score"]
+    top.sort(key=order)
+    return {"n_valid": n_valid, "top": top}
 
 
 @lru_cache(maxsize=1)

@@ -68,7 +68,7 @@ def test_top_sets_match_simulator_and_validator():
     for item in top:
         assert validate(item["decisions"]) == []
         result = simulate(item["decisions"])
-        assert item["Score"] == pytest.approx(result["Score"], abs=1e-9, rel=0)
+        assert item["Score"] == result["Score"]
         assert item["cost"] == result["cost"]
 
 
