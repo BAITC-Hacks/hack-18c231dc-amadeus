@@ -11,6 +11,7 @@ import pytest
 
 from api import agent, explanation, main
 from engine.simulator import simulate
+from engine.validator import validate
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +62,21 @@ def model_client(monkeypatch, isolated_openai, model_answer):
         status="completed", output_text=json.dumps(model_answer, ensure_ascii=False),
     )
     return client
+
+
+def call(name, arguments, call_id):
+    return SimpleNamespace(type="function_call", name=name,
+                           arguments=json.dumps(arguments, ensure_ascii=False), call_id=call_id)
+
+
+def tool_turn(response_id, *calls):
+    return SimpleNamespace(id=response_id, status="completed", output=list(calls), output_text="")
+
+
+def final_turn(answer, status="completed"):
+    text = answer if isinstance(answer, str) else json.dumps(answer, ensure_ascii=False)
+    return SimpleNamespace(id="resp_final", status=status,
+                           output=[SimpleNamespace(type="message")], output_text=text)
 
 
 def normalize(decisions):
