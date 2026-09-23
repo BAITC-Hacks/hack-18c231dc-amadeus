@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 
-from api.explanation import build_explanation_data, explain
+from api.agent import explain_with_agent as explain
+from api.explanation import build_explanation_data
 from engine.data import load_city
 from engine.scenario_stats import critical_warnings, scenario_comparison
 from engine.simulator import simulate

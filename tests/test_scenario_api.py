@@ -5,15 +5,15 @@ from unittest.mock import Mock
 from fastapi.testclient import TestClient
 import pytest
 
-from api import explanation, main
+from api import agent, explanation, main
 
 
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr(
-        explanation, "OpenAI", Mock(side_effect=AssertionError("Реальные запросы запрещены")),
-    )
+    forbidden = Mock(side_effect=AssertionError("Реальные запросы запрещены"))
+    monkeypatch.setattr(explanation, "OpenAI", forbidden)
+    monkeypatch.setattr(agent, "OpenAI", forbidden)
     with TestClient(main.app) as test_client:
         yield test_client
 

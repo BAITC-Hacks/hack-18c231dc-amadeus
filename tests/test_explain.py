@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 import pytest
 
-from api import explanation, main
+from api import agent, explanation, main
 from engine.simulator import simulate
 from engine.validator import validate
 
@@ -21,6 +21,7 @@ def isolated_openai(monkeypatch):
     monkeypatch.setenv("OPENAI_MODEL", "test-model")
     factory = MagicMock(side_effect=AssertionError("Реальный клиент OpenAI запрещён в тестах"))
     monkeypatch.setattr(explanation, "OpenAI", factory)
+    monkeypatch.setattr(agent, "OpenAI", factory)
     return factory
 
 
@@ -65,6 +66,12 @@ def model_client(monkeypatch, isolated_openai, model_answer):
 
 def normalize(decisions):
     return [{key: value for key, value in item.items() if value is not None} for item in decisions]
+
+
+def explanation_data(decisions):
+    # Факты для одиночного explain(): тот же путь, что у /api/explain, без эндпоинта.
+    report = main.simulate_scenario(main.SimulationRequest.model_validate({"decisions": decisions}))
+    return explanation.build_explanation_data(normalize(decisions), report)
 
 
 def test_each_measure_contribution_is_positive(client, example):
@@ -147,14 +154,10 @@ def test_template_reports_remaining_critical_values(client):
     assert not any("критических значений не осталось" in point for point in body["strengths"])
 
 
-def test_structured_model_answer(client, example, model_client, model_answer, isolated_openai):
-    response = client.post("/api/explain", json={"decisions": example})
-    assert response.status_code == 200
-    body = response.json()
-    assert body["valid"] is True
-    assert body["ai_generated"] is True
-    for key, value in model_answer.items():
-        assert body[key] == value
+def test_structured_model_answer(example, model_client, model_answer, isolated_openai):
+    result, ai_generated = explanation.explain(explanation_data(example))
+    assert ai_generated is True
+    assert result.model_dump() == model_answer
     isolated_openai.assert_called_once_with(api_key="test-key-not-a-secret", timeout=20.0, max_retries=0)
     request = model_client.responses.create.call_args.kwargs
     assert request["model"] == "test-model"
@@ -165,8 +168,9 @@ def test_structured_model_answer(client, example, model_client, model_answer, is
     assert set(schema["required"]) == set(model_answer)
 
 
-def test_model_receives_only_server_facts(client, example, model_client):
-    body = client.post("/api/explain", json={"decisions": example}).json()
+def test_model_receives_only_server_facts(example, model_client):
+    facts = explanation_data(example)
+    explanation.explain(facts)
     request = model_client.responses.create.call_args.kwargs
     assert request["input"][0]["role"] == "system"
     data = json.loads(request["input"][1]["content"])
@@ -182,7 +186,7 @@ def test_model_receives_only_server_facts(client, example, model_client):
         ],
         "after": [],
     }
-    assert data["contributions"] == body["contributions"]
+    assert data["contributions"] == facts["contributions"]
     assert len(data["catalog"]) == 14
     assert len(data["selected_measures"]) == 5
     assert all("cost" in item and "lag" in item for item in data["selected_measures"])
@@ -234,4 +238,21 @@ def test_unusable_model_response_returns_template(client, example, model_client,
 def test_client_cannot_supply_score(client, example, isolated_openai):
     response = client.post("/api/explain", json={"decisions": example, "Score": 100})
     assert response.status_code == 422
+    isolated_openai.assert_not_called()
+
+
+def test_explain_endpoint_uses_agent(client, example, model_answer, monkeypatch):
+    assert main.explain is agent.explain_with_agent
+    answer = agent.AgentExplanation(**model_answer, tools_called=["score_scenario", "get_optimum"])
+    monkeypatch.setattr(main, "explain", lambda data: (answer, True))
+    body = client.post("/api/explain", json={"decisions": example}).json()
+    assert body["ai_generated"] is True
+    assert body["tools_called"] == ["score_scenario", "get_optimum"]
+    assert body["summary"] == model_answer["summary"]
+
+
+def test_agent_fallback_without_key_reports_no_tools(client, example, isolated_openai):
+    body = client.post("/api/explain", json={"decisions": example}).json()
+    assert body["ai_generated"] is False
+    assert body["tools_called"] == []
     isolated_openai.assert_not_called()
