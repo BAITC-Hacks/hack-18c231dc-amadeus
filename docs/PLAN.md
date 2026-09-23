@@ -14,7 +14,7 @@
 | Объяснение сильных сторон, рисков, последствий | must have | поля `strengths`, `risks`, `consequences`, `recommendations` в `/api/explain` | API готов, **в UI нет** |
 | Изменение решений меняет Score | критерий проверки | автотесты движка | готово |
 | README и воспроизводимость | 25 баллов | проход по README из чистого клона | **README не описывает запуск UI** |
-| Использование AI/agentic AI | 25 баллов | агент с tool calling сам вызывает движок для проверки альтернатив | **нет: сейчас один вызов LLM без инструментов** |
+| Использование AI/agentic AI | 25 баллов | агент с tool calling сам вызывает движок для проверки альтернатив | `api/agent.py` и `engine/optimizer.py` готовы, тесты на подменённом клиенте; **к `/api/explain` подключает xehrf** |
 
 ## 2. MVP
 
@@ -75,7 +75,7 @@ tests/              test_engine, test_api, test_explain, test_database (77 те�
 
 1. **xehrf:** UI вызывает `/api/simulate` и `/api/explain`, показывает AI-разбор с подписью источника («AI-анализ: <модель>» или «Резервный режим: объяснение по шаблону, без LLM»). Расчёт Score и бюджета в `App.jsx` заменяется ответом API.
 2. **secorluve:** README — запуск API и UI (`npm install`, `npm run dev`), режим без ключа, раздел «Сторонние компоненты» (FastAPI, uvicorn, openai, python-dotenv, pytest, httpx, React, Vite, lucide-react, датасет организаторов). Убрать фразу «интерфейс пока не реализован».
-3. **Малика:** `engine/optimizer.py` (оптимум перебором, тест на совпадение со `simulate()`), затем `api/agent.py` с tool calling и тестами на подменённом клиенте OpenAI.
+3. **Малика:** готово в 16:06 — `engine/optimizer.py` (694395 валидных наборов, оптимум 57.24 при стоимости 98, совпадает с `simulate()`) и `api/agent.py` (`explain_with_agent(data)`, та же сигнатура, что у `explain()`, плюс поле `tools_called`). Живой прогон с ключом ещё не сделан.
 
 Не делаем: анализ чувствительности, отдельный SPEC, Chart.js.
 

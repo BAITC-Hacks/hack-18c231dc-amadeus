@@ -30,7 +30,8 @@ MAX_TOP_K = 3
 REQUEST_TIMEOUT = 20.0
 TOTAL_TIMEOUT = 45.0
 # Числа, не приклеенные к буквам: коды M14, T1 не считаются числами.
-NUMBER_RE = re.compile(r"(?<![\w.,])[+\-−]?\d+(?:[.,]\d+)?")
+# 1_000 и 1e6 разбираются целиком, чтобы не пройти проверку по первой цифре.
+NUMBER_RE = re.compile(r"(?<![\w.,])[+\-−]?\d[\d_]*(?:[.,]\d+)?(?:[eE][+\-]?\d+)?")
 
 
 class AgentExplanation(Explanation):
@@ -40,10 +41,13 @@ class AgentExplanation(Explanation):
 SYSTEM_PROMPT = """Ты аналитик акимата Астаны. Отвечай на русском.
 Пользователь передаёт сценарий из мер. Сам ты ничего не считаешь: у тебя есть
 инструменты расчётного движка.
-1. Сначала вызови score_scenario для переданного сценария.
-2. Чтобы дать рекомендацию, вызови suggest_swaps и/или get_optimum.
+1. Сначала вызови score_scenario: он считает сценарий пользователя.
+2. Чтобы дать рекомендацию, вызови suggest_swaps (замены в сценарии
+   пользователя) и/или get_optimum (лучшие наборы полного перебора).
    Рекомендации — только из их результатов.
 3. Всего не больше 4 вызовов инструментов.
+Score сценария пользователя — только поле Score из score_scenario. Score из
+suggest_swaps и get_optimum относятся к другим наборам — так и подписывай.
 Числа бери ТОЛЬКО из результатов инструментов и копируй как есть. Ничего не
 вычисляй: не складывай, не вычитай, не переводи в проценты, не округляй.
 Нужного числа нет в результатах — пиши без числа.
@@ -53,44 +57,24 @@ SYSTEM_PROMPT = """Ты аналитик акимата Астаны. Отвеч
 consequences, recommendations — списки коротких пунктов, без Markdown-разметки.
 """
 
-DECISIONS_SCHEMA = {
-    "type": "array",
-    "description": "Набор мер: measure_id из каталога, district — район для районной меры, null для городской.",
-    "items": {
-        "type": "object",
-        "properties": {
-            "measure_id": {"type": "string"},
-            "district": {"type": ["string", "null"]},
-        },
-        "required": ["measure_id", "district"],
-        "additionalProperties": False,
-    },
-}
+TOP_K_SCHEMA = {"type": "integer", "description": "Сколько вариантов вернуть, от 1 до 3."}
 
 TOOLS = [
     {
         "type": "function",
         "name": "score_scenario",
-        "description": "Проверить набор по правилам и рассчитать Score, D по районам, стоимость, лаги мер.",
-        "parameters": {
-            "type": "object",
-            "properties": {"decisions": DECISIONS_SCHEMA},
-            "required": ["decisions"],
-            "additionalProperties": False,
-        },
+        "description": "Проверить сценарий пользователя по правилам и рассчитать Score, D по районам, стоимость, лаги мер.",
+        "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
         "strict": True,
     },
     {
         "type": "function",
         "name": "suggest_swaps",
-        "description": "Лучшие одиночные замены меры в наборе, которые повышают Score и проходят правила.",
+        "description": "Лучшие одиночные замены меры в сценарии пользователя, которые повышают Score и проходят правила.",
         "parameters": {
             "type": "object",
-            "properties": {
-                "decisions": DECISIONS_SCHEMA,
-                "top_k": {"type": "integer", "description": "Сколько замен вернуть, от 1 до 3."},
-            },
-            "required": ["decisions", "top_k"],
+            "properties": {"top_k": TOP_K_SCHEMA},
+            "required": ["top_k"],
             "additionalProperties": False,
         },
         "strict": True,
@@ -101,9 +85,7 @@ TOOLS = [
         "description": "Лучшие наборы по Score из полного перебора всех валидных наборов в бюджете.",
         "parameters": {
             "type": "object",
-            "properties": {
-                "top_k": {"type": "integer", "description": "Сколько наборов вернуть, от 1 до 3."},
-            },
+            "properties": {"top_k": TOP_K_SCHEMA},
             "required": ["top_k"],
             "additionalProperties": False,
         },
@@ -125,15 +107,9 @@ def _rounded(value):
     return value
 
 
-def _clean(decisions) -> list[dict]:
-    """district = null от модели означает городскую меру: validate() не принимает ключ."""
-    if not isinstance(decisions, list):
-        raise ValueError("decisions должен быть списком")
-    return [
-        {key: value for key, value in item.items() if value is not None}
-        if isinstance(item, dict) else item
-        for item in decisions
-    ]
+def _clean(decisions: list[dict]) -> list[dict]:
+    """district = None означает городскую меру: validate() не принимает ключ."""
+    return [{key: value for key, value in item.items() if value is not None} for item in decisions]
 
 
 def _top_k(value) -> int:
@@ -194,14 +170,17 @@ def get_optimum(top_k: int) -> dict:
     return _rounded({"n_valid": optimum["n_valid"], "top": optimum["top"][:_top_k(top_k)]})
 
 
-def run_tool(name: str, arguments: str) -> dict:
-    """Ошибка аргументов возвращается модели как данные, а не исключение."""
+def run_tool(name: str, arguments: str, scenario: list[dict]) -> dict:
+    """Инструменты привязаны к сценарию пользователя: модель не может подменить набор.
+
+    Ошибка аргументов возвращается модели как данные, а не исключение.
+    """
     try:
         args = json.loads(arguments)
         if name == "score_scenario":
-            return score_scenario(args["decisions"])
+            return score_scenario(scenario)
         if name == "suggest_swaps":
-            return suggest_swaps_tool(args["decisions"], args["top_k"])
+            return suggest_swaps_tool(scenario, args["top_k"])
         if name == "get_optimum":
             return get_optimum(args["top_k"])
         return {"error": f"Неизвестный инструмент {name}"}
@@ -210,13 +189,13 @@ def run_tool(name: str, arguments: str) -> dict:
 
 
 def _numbers(value, found: set[float]) -> set[float]:
-    """Абсолютные значения всех чисел из результатов, включая числа внутри строк."""
+    """Все числа из результатов со знаком, включая числа внутри строк."""
     if isinstance(value, bool):
         return found
     if isinstance(value, (int, float)):
-        found.add(abs(float(value)))
+        found.add(float(value))
     elif isinstance(value, str):
-        found.update(abs(_parse(raw)) for raw in NUMBER_RE.findall(value))
+        found.update(_parse(raw) for raw in NUMBER_RE.findall(value))
     elif isinstance(value, dict):
         for item in value.values():
             _numbers(item, found)
@@ -231,16 +210,24 @@ def _parse(raw: str) -> float:
 
 
 def unverified_numbers(explanation: Explanation, tool_results: list) -> list[str]:
-    """Числа ответа, которых нет в результатах инструментов (с точностью записанных знаков)."""
+    """Числа ответа, которых нет в результатах инструментов.
+
+    Сравнение точное: инструменты уже отдают округлённые кодом значения.
+    Число без знака может описывать отрицательное значение словами («снизился на 0.3»),
+    число с явным знаком должно совпасть со знаком.
+    """
     allowed = _numbers(tool_results, set())
     text = "\n".join([explanation.summary, *explanation.strengths, *explanation.risks,
                       *explanation.consequences, *explanation.recommendations])
+
+    def known(value: float) -> bool:
+        return any(abs(value - item) <= 1e-9 for item in allowed)
+
     bad = []
     for raw in NUMBER_RE.findall(text):
-        digits = re.split(r"[.,]", raw)
-        decimals = len(digits[1]) if len(digits) > 1 else 0
-        value = abs(_parse(raw))
-        if not any(abs(value - item) <= 0.5 * 10 ** -decimals + 1e-9 for item in allowed):
+        value = _parse(raw)
+        signed = raw[0] in "+-−"
+        if not (known(value) or (not signed and known(-value))):
             bad.append(raw)
     return bad
 
@@ -250,16 +237,6 @@ def _scenario(data: dict) -> list[dict]:
         {"measure_id": item["id"], "district": item.get("district")}
         for item in data["selected_measures"]
     ]
-
-
-def _same_set(arguments: str, scenario: list[dict]) -> bool:
-    """Модель посчитала именно сценарий пользователя, а не другой набор."""
-    try:
-        decisions = _clean(json.loads(arguments)["decisions"])
-        key = lambda items: sorted(json.dumps(item, sort_keys=True, ensure_ascii=False) for item in items)
-        return key(decisions) == key(_clean(scenario))
-    except (KeyError, TypeError, ValueError, AttributeError):
-        return False
 
 
 def run_agent(client, model: str, data: dict) -> AgentExplanation | None:
@@ -296,7 +273,7 @@ def run_agent(client, model: str, data: dict) -> AgentExplanation | None:
             return None
         calls = [item for item in response.output if item.type == "function_call"]
         if not calls:
-            # Без расчёта сценария пользователя числа ответа относятся к другому набору.
+            # Без расчёта сценария пользователя объяснять нечего.
             if not scenario_scored:
                 return None
             explanation = Explanation.model_validate_json(response.output_text)
@@ -306,10 +283,10 @@ def run_agent(client, model: str, data: dict) -> AgentExplanation | None:
         outputs = []
         for call in calls:
             if len(called) < MAX_TOOL_CALLS:
-                result = run_tool(call.name, call.arguments)
+                result = run_tool(call.name, call.arguments, scenario)
                 called.append(call.name)
                 results.append(result)
-                if call.name == "score_scenario" and result.get("valid") and _same_set(call.arguments, scenario):
+                if call.name == "score_scenario" and result.get("valid"):
                     scenario_scored = True
             else:
                 result = {"error": "Лимит вызовов инструментов исчерпан"}

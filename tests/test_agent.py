@@ -110,8 +110,8 @@ def test_without_key_returns_template_without_client(data, isolated_openai, monk
 
 def test_agent_calls_engine_tools_and_answer_is_grounded(data, scripted):
     create = scripted(
-        tool_turn("resp_1", call("score_scenario", {"decisions": AS_MODEL}, "call_1")),
-        tool_turn("resp_2", call("suggest_swaps", {"decisions": AS_MODEL, "top_k": 3}, "call_2")),
+        tool_turn("resp_1", call("score_scenario", {}, "call_1")),
+        tool_turn("resp_2", call("suggest_swaps", {"top_k": 3}, "call_2")),
         tool_turn("resp_3", call("get_optimum", {"top_k": 1}, "call_3")),
         final_turn(grounded_answer()),
     )
@@ -144,7 +144,7 @@ def test_agent_calls_engine_tools_and_answer_is_grounded(data, scripted):
 def test_number_not_from_tools_falls_back(data, scripted):
     answer = scenario_answer() | {"summary": "Score вырастет на 12.5 пункта."}
     scripted(
-        tool_turn("resp_1", call("score_scenario", {"decisions": AS_MODEL}, "call_1")),
+        tool_turn("resp_1", call("score_scenario", {}, "call_1")),
         final_turn(answer),
     )
     explanation, ai_generated = agent.explain_with_agent(data)
@@ -158,26 +158,23 @@ def test_answer_without_tool_calls_is_rejected(data, scripted):
     assert agent.explain_with_agent(data)[1] is False
 
 
-def test_other_scenario_numbers_are_rejected(data, scripted):
+def test_tools_are_bound_to_user_scenario(data, scripted):
+    # Даже если модель передаст чужой набор, инструменты считают сценарий пользователя.
     best = cached_top()["top"][0]["decisions"]
-    other = [{"measure_id": item["measure_id"], "district": item.get("district")} for item in best]
-    scripted(
-        tool_turn("resp_1", call("score_scenario", {"decisions": other}, "call_1")),
-        final_turn(optimum_answer()),
-    )
-    assert agent.explain_with_agent(data)[1] is False
-
-
-def test_scenario_order_does_not_matter(data, scripted):
-    scripted(
-        tool_turn("resp_1", call("score_scenario", {"decisions": list(reversed(AS_MODEL))}, "call_1")),
+    create = scripted(
+        tool_turn("resp_1", call("score_scenario", {"decisions": best}, "call_1")),
+        tool_turn("resp_2", call("suggest_swaps", {"decisions": best, "top_k": 1}, "call_2")),
         final_turn(scenario_answer()),
     )
     assert agent.explain_with_agent(data)[1] is True
+    scored = json.loads(create.call_args_list[1].kwargs["input"][0]["output"])
+    assert scored["Score"] == round(simulate(EXAMPLE)["Score"], 2)
+    swaps = json.loads(create.call_args_list[2].kwargs["input"][0]["output"])
+    assert swaps["swaps"][0]["replace"] == {"measure_id": "M5", "district": "Сарыарка"}
 
 
 def test_tool_call_limit(data, scripted):
-    turns = [tool_turn("resp_0", call("score_scenario", {"decisions": AS_MODEL}, "call_0"))]
+    turns = [tool_turn("resp_0", call("score_scenario", {}, "call_0"))]
     turns += [tool_turn(f"resp_{index}", call("get_optimum", {"top_k": 3}, f"call_{index}"))
               for index in range(1, 4)]
     create = scripted(*turns, final_turn(optimum_answer()))
@@ -215,14 +212,14 @@ def test_errors_and_timeouts_fall_back_without_raising(data, scripted, failure):
     final_turn({"summary": "нет остальных полей"}),
 ])
 def test_bad_final_answer_falls_back(data, scripted, final):
-    scripted(tool_turn("resp_1", call("score_scenario", {"decisions": AS_MODEL}, "call_1")), final)
+    scripted(tool_turn("resp_1", call("score_scenario", {}, "call_1")), final)
     assert agent.explain_with_agent(data)[1] is False
 
 
 def test_bad_tool_arguments_are_returned_to_model(data, scripted):
     create = scripted(
-        tool_turn("resp_1", call("score_scenario", {"wrong": 1}, "call_1")),
-        tool_turn("resp_2", call("score_scenario", {"decisions": AS_MODEL}, "call_2")),
+        tool_turn("resp_1", call("get_optimum", {"wrong": 1}, "call_1")),
+        tool_turn("resp_2", call("score_scenario", {}, "call_2")),
         final_turn(scenario_answer()),
     )
     explanation, ai_generated = agent.explain_with_agent(data)
@@ -245,7 +242,7 @@ def test_tools_use_engine_numbers():
 
 
 def test_unverified_numbers():
-    results = [{"Score": 57.24, "cost": 98, "note": "Стоимость 105 превышает бюджет 100."}]
+    results = [{"Score": 57.24, "cost": 98, "lag": 1, "note": "Стоимость 105 превышает бюджет 100."}]
 
     def check(summary):
         answer = Explanation(summary=summary, strengths=[], risks=[], consequences=[], recommendations=[])
@@ -255,3 +252,11 @@ def test_unverified_numbers():
     assert check("Бюджет 100, набор стоил бы 105.") == []
     assert check("Score 57.3") == ["57.3"]
     assert check("Рост на 15%") == ["15"]
+    # Замечания ревью: точное совпадение, знак, 1e6 и 1_000 целиком.
+    assert check("Score 57.2") == ["57.2"]
+    assert check("Остаток −98 и -105") == ["−98", "-105"]
+    assert check("Бюджет 1e6 или 1_000") == ["1e6", "1_000"]
+    negative = [{"score_delta": -0.3}]
+    answer = Explanation(summary="Score снизился на 0.3, изменение −0.3.", strengths=[], risks=[],
+                         consequences=[], recommendations=[])
+    assert agent.unverified_numbers(answer, negative) == []
