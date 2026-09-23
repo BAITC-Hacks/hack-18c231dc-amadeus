@@ -11,7 +11,6 @@ import pytest
 
 from api import agent, explanation, main
 from engine.simulator import simulate
-from engine.validator import validate
 
 
 @pytest.fixture(autouse=True)
@@ -229,7 +228,10 @@ def test_openai_error_returns_template(client, example, model_client, error_kind
     ("completed", '{"summary":"Нет остальных полей"}'),
 ])
 def test_unusable_model_response_returns_template(client, example, model_client, status, output):
-    model_client.responses.create.return_value = SimpleNamespace(status=status, output_text=output)
+    model_client.responses.create.side_effect = [
+        tool_turn("resp_1", call("score_scenario", {}, "call_1")),
+        final_turn(output, status=status),
+    ]
     response = client.post("/api/explain", json={"decisions": example})
     assert response.status_code == 200
     assert response.json()["ai_generated"] is False

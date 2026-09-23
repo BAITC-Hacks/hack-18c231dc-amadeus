@@ -304,7 +304,7 @@ print(simulate(decisions)["Score"])  # 56.54307, стоимость 95
 | pydantic (зависимость fastapi) | 2.13.5 | MIT |
 | openai (Python SDK) | 2.54.0 | Apache-2.0 |
 | python-dotenv | 1.2.3 | BSD-3-Clause |
-| numpy | 2.5.3 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
+| numpy | 2.5.3, ограничение `>=2.2,<3.0` в `requirements.txt` | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
 | pytest | 8.4.2 | MIT |
 | httpx | 0.28.1 | BSD-3-Clause |
 | react, react-dom | 19.3.0 | MIT |
