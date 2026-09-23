@@ -4,4 +4,6 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  server: { host: "localhost", port: 5173, strictPort: true },
+  preview: { host: "localhost", port: 3000, strictPort: true },
 });

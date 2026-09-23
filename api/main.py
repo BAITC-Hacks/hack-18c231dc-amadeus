@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from api.explanation import build_explanation_data, explain
 from engine.data import load_city
+from engine.scenario_stats import critical_warnings, scenario_comparison
 from engine.simulator import simulate
 from engine.validator import validate
 
@@ -102,6 +103,8 @@ def simulate_scenario(request: SimulationRequest) -> dict:
         "N_crit": result["N_crit"],
         "synergies": synergies,
         "districts": districts,
+        **scenario_comparison(result["Score"], city),
+        "warnings": critical_warnings(decisions, baseline, result, city),
     }
 
 
@@ -119,4 +122,7 @@ def explain_scenario(request: SimulationRequest) -> dict:
         "ai_generated": ai_generated,
         **explanation.model_dump(),
         "contributions": data["contributions"],
+        **{key: data[key] for key in (
+            "best_possible_score", "gap_to_best", "percentile", "warnings",
+        )},
     }

@@ -32,6 +32,12 @@ SYSTEM_PROMPT = """Ты аналитик городского развития �
 вклады, проценты или сроки, не придумывай чисел и не округляй их самостоятельно.
 Объясни компромиссы: каким районам помогли, какие не затронуты, самый слабый
 район, критические значения до и после, лаги и сработавшие синергии.
+Если есть best_possible_score и gap_to_best, объясни отставание от лучшего
+допустимого набора. percentile — приблизительный процент допустимых сценариев
+с меньшим Score, а не рейтинг среди реальных людей. Не называй его точным.
+Если эти поля равны null, статистика недоступна: не придумывай сравнение.
+warnings указывает меры, после которых появились новые критические значения;
+объясни этот компромисс, назови район, показатель и переданные значения.
 Вклад меры — Score полного набора минус Score без этой меры с её синергиями.
 Вклады не обязаны складываться в разницу с базой из-за min(D), штрафов и синергий.
 Рекомендации о смене мер предлагай ТОЛЬКО из recommendation_options: сервер
@@ -81,6 +87,7 @@ def build_explanation_data(decisions: list[dict], report: dict) -> dict:
         **{key: report[key] for key in (
             "Score", "baseline_score", "score_delta", "cost", "remaining_budget",
             "D_avg", "D_min", "N_crit", "districts", "synergies",
+            "best_possible_score", "gap_to_best", "percentile", "warnings",
         )},
         "critical_values": critical,
         "critical_threshold": city["scoring"]["critical_threshold"],
@@ -148,6 +155,22 @@ def template_explanation(data: dict) -> Explanation:
         strengths.append("После мер критических значений не осталось.")
     if data["unchanged_districts"]:
         risks.append("Без изменений: " + ", ".join(data["unchanged_districts"]) + ".")
+    risks.extend(
+        f"Новое критическое значение после {item['measure_id']}: "
+        f"{item['district']}, {item['indicator']} — {item['before']} → {item['after']}."
+        for item in data.get("warnings", [])
+    )
+    comparisons = []
+    if data.get("best_possible_score") is not None:
+        comparisons.append(
+            f"Лучший допустимый Score — {data['best_possible_score']}; "
+            f"отставание от него — {data['gap_to_best']}."
+        )
+    if data.get("percentile") is not None:
+        comparisons.append(
+            f"Сценарий лучше приблизительно {data['percentile']}% допустимых наборов; "
+            "это сравнение рассчитанных сценариев, а не реальных участников."
+        )
     recommendations = [
         f"Сравнить замену {item['replace_measure_id']} на {item['measure_id']} "
         f"({item.get('district', 'весь город')}): стоимость набора {item['cost']}, "
@@ -163,7 +186,7 @@ def template_explanation(data: dict) -> Explanation:
             f"{item['id']} — {item['name']}: лаг {item['lag']} кварталов "
             f"при горизонте {data['horizon']} кварталов."
             for item in data["selected_measures"]
-        ] + [data["contribution_note"]],
+        ] + [data["contribution_note"]] + comparisons,
         recommendations=recommendations or ["Сохранить набор и наблюдать за указанными рисками."],
     )
 

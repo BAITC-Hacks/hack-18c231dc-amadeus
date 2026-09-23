@@ -750,3 +750,25 @@ button:focus-visible {
     font-size: 28px;
   }
 }
+
+
+.scenario-note { color: var(--muted); }
+.scenario-actions { display: flex; margin-top: 16px; }
+.primary-button { background: var(--green); color: white; }
+.primary-button:hover { background: var(--green-dark); color: white; }
+.explanation-panel { margin-top: 16px; }
+.explanation-panel .panel-heading { flex-wrap: wrap; }
+.explanation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.explanation-grid h3 { margin: 8px 0; }
+.explanation-grid ul { padding-left: 20px; }
+.explanation-grid li { margin-bottom: 8px; }
+.explanation-badge { display: inline-block; padding: 6px 12px; border-radius: 8px; background: #e2f2ec; color: var(--green-dark); }
+.explanation-badge.template { background: #fff2d9; color: #785016; }
+.indicator-table-wrap { overflow-x: auto; }
+.indicator-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.indicator-table caption { text-align: left; padding-bottom: 8px; color: var(--muted); }
+.indicator-table th, .indicator-table td { padding: 8px 4px; border-bottom: 1px solid var(--line); text-align: right; }
+.indicator-table th:first-child { text-align: left; }
+.indicator-table td { white-space: nowrap; }
+.district-score strong { font-size: 25px; }
+@media (max-width: 560px) { .explanation-grid { grid-template-columns: 1fr; } }
