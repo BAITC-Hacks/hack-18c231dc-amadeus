@@ -1,0 +1,24 @@
+{
+  "decisions": [
+    {
+      "measure_id": "M7",
+      "district": "Нура"
+    },
+    {
+      "measure_id": "M8",
+      "district": "Нура"
+    },
+    {
+      "measure_id": "M10",
+      "district": "Нура"
+    },
+    {
+      "measure_id": "M12",
+      "district": null
+    },
+    {
+      "measure_id": "M5",
+      "district": "Сарыарка"
+    }
+  ]
+}
